@@ -1,0 +1,16 @@
+student:
+  name: Eduardo
+
+study:
+  daily_goal: 5
+  primary_area:
+    - cybersecurity
+  secondary_area:
+    - data_science
+
+learning:
+  adaptive: true
+  prioritize_weak_topics: true
+  contextualize_professionally: true
+  use_analogies: true
+  include_practical_labs: true
