@@ -5,7 +5,8 @@ from study_agent.learning.exercises import create_exercise
 
 
 def test_exercise_and_attempt_are_typed() -> None:
-    exercise = create_exercise("e1", "cybersecurity", "linux", "Question", "Answer", Difficulty.INTERMEDIATE)
+    exercise = create_exercise(
+        "e1", "cybersecurity", "linux", "Question", "Answer", Difficulty.INTERMEDIATE)
     attempt = ExerciseAttempt(exercise.id, "Answer", True, 95, "Correct")
     assert isinstance(exercise, Exercise)
     assert attempt.correct is True

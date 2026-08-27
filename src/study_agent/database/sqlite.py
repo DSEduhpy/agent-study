@@ -94,7 +94,8 @@ class SQLiteDatabase:
     @staticmethod
     def _migrate_sessions(connection: sqlite3.Connection) -> None:
         """Add session lifecycle columns to databases created by version 0.1."""
-        columns = {row[1] for row in connection.execute("PRAGMA table_info(study_sessions)")}
+        columns = {row[1] for row in connection.execute(
+            "PRAGMA table_info(study_sessions)")}
         migrations = {
             "session_id": "ALTER TABLE study_sessions ADD COLUMN session_id TEXT",
             "status": "ALTER TABLE study_sessions ADD COLUMN status TEXT NOT NULL DEFAULT 'active'",

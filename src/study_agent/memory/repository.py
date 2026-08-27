@@ -23,14 +23,16 @@ class LearningRepository:
 
     def get_student(self, student_id: str) -> dict[str, object] | None:
         with self.database.connection() as connection:
-            row = connection.execute("SELECT * FROM students WHERE id = ?", (student_id,)).fetchone()
+            row = connection.execute(
+                "SELECT * FROM students WHERE id = ?", (student_id,)).fetchone()
         return dict(row) if row else None
 
     def save_lesson(self, lesson: Lesson) -> None:
         with self.database.connection() as connection:
             connection.execute(
                 "INSERT OR REPLACE INTO lessons VALUES (?, ?, ?, ?, ?, ?)",
-                (lesson.id, lesson.title, lesson.area, lesson.topic, lesson.content, lesson.source_path),
+                (lesson.id, lesson.title, lesson.area,
+                 lesson.topic, lesson.content, lesson.source_path),
             )
 
     def save_exercise(self, exercise: Exercise) -> None:
@@ -46,7 +48,8 @@ class LearningRepository:
         with self.database.connection() as connection:
             connection.execute(
                 "INSERT INTO exercise_attempts (exercise_id, student_id, answer, correct, score, feedback, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (attempt.exercise_id, student_id, attempt.answer, int(attempt.correct), attempt.score, attempt.feedback, attempt.timestamp.isoformat()),
+                (attempt.exercise_id, student_id, attempt.answer, int(attempt.correct),
+                 attempt.score, attempt.feedback, attempt.timestamp.isoformat()),
             )
 
     def save_session(self, session: StudySession) -> None:
@@ -77,7 +80,8 @@ class LearningRepository:
     def list_attempts(self, student_id: str) -> list[dict[str, object]]:
         with self.database.connection() as connection:
             rows = connection.execute(
-                "SELECT * FROM exercise_attempts WHERE student_id = ? ORDER BY timestamp", (student_id,)
+                "SELECT * FROM exercise_attempts WHERE student_id = ? ORDER BY timestamp", (
+                    student_id,)
             ).fetchall()
         return [dict(row) for row in rows]
 

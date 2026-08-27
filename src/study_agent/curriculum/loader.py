@@ -13,7 +13,8 @@ class CurriculumLoader:
     def __init__(self, root: Path | str) -> None:
         self.root = Path(root).resolve()
         if not self.root.is_dir():
-            raise CurriculumError(f"Curriculum directory not found: {self.root}")
+            raise CurriculumError(
+                f"Curriculum directory not found: {self.root}")
 
     def list_lessons(self) -> list[str]:
         """Return stable, relative lesson identifiers for Markdown files."""
@@ -28,7 +29,8 @@ class CurriculumLoader:
             relative = relative.with_suffix(".md")
         candidate = (self.root / relative).resolve()
         if self.root not in candidate.parents or candidate.suffix.lower() != ".md":
-            raise CurriculumError("Lesson path escapes the curriculum directory")
+            raise CurriculumError(
+                "Lesson path escapes the curriculum directory")
         if not candidate.is_file():
             raise CurriculumError(f"Lesson not found: {lesson_id}")
         try:
@@ -40,5 +42,6 @@ class CurriculumLoader:
             raise CurriculumError("Lesson must contain a Markdown H1 title")
         parts = candidate.relative_to(self.root).parts
         if len(parts) < 3:
-            raise CurriculumError("Lesson path must include area and topic directories")
+            raise CurriculumError(
+                "Lesson path must include area and topic directories")
         return Lesson(candidate.stem, title_match.group(1), parts[0], "/".join(parts[1:-1]), content, candidate.as_posix())

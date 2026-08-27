@@ -40,8 +40,10 @@ class TutorEngine:
     def start_session(self, student_id: str, lesson_id: str, *, objective: str | None = None) -> StudySession:
         """Load a lesson and persist a new active study session."""
         lesson = self.curriculum.load(lesson_id)
-        lesson_key = Path(lesson.source_path).resolve().relative_to(self.curriculum.root).with_suffix("").as_posix()
-        session = StudySession(student_id=student_id, lesson_ids=(lesson_key,), session_id=str(uuid4()))
+        lesson_key = Path(lesson.source_path).resolve().relative_to(
+            self.curriculum.root).with_suffix("").as_posix()
+        session = StudySession(student_id=student_id, lesson_ids=(
+            lesson_key,), session_id=str(uuid4()))
         self.repository.save_student(student_id, self.profile)
         self.repository.save_lesson(lesson)
         self.repository.save_session(session)
@@ -84,7 +86,8 @@ class TutorEngine:
         return TutorContext(self.profile, lesson, session, objective or f"Understand {lesson.title} and apply it safely.", session.interactions)
 
     def _record_interaction(self, session: StudySession, response: str) -> None:
-        updated = replace(session, interactions=session.interactions + (response,))
+        updated = replace(
+            session, interactions=session.interactions + (response,))
         self.repository.update_session(updated)
         self._sessions[updated.session_id] = updated
 
@@ -99,7 +102,8 @@ class TutorEngine:
     def _format_context(context: TutorContext) -> str:
         preferences = ", ".join(name for name, enabled in (
             ("analogies", context.student_profile.use_analogies),
-            ("professional context", context.student_profile.contextualize_professionally),
+            ("professional context",
+             context.student_profile.contextualize_professionally),
             ("practical application", context.student_profile.include_practical_labs),
         ) if enabled)
         return (f"Student: {context.student_profile.name}\n"

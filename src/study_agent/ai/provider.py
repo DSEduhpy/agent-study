@@ -17,5 +17,6 @@ class AIProvider(ABC):
 
     def chat(self, messages: list[dict[str, str]]) -> str:
         """Generate from chat messages using the provider's normal text path."""
-        prompt = "\n\n".join(f"{message['role']}: {message['content']}" for message in messages)
+        prompt = "\n\n".join(
+            f"{message['role']}: {message['content']}" for message in messages)
         return self.generate(prompt)

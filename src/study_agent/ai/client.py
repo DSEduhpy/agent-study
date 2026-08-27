@@ -19,13 +19,16 @@ class OpenAIProvider(AIProvider):
         try:
             from openai import OpenAI
         except ImportError as exc:
-            raise AIProviderError("OpenAI dependency is not installed") from exc
+            raise AIProviderError(
+                "OpenAI dependency is not installed") from exc
         self._model = settings.ai_model
-        self._client = OpenAI(api_key=settings.ai_api_key, timeout=settings.ai_timeout_seconds)
+        self._client = OpenAI(api_key=settings.ai_api_key,
+                              timeout=settings.ai_timeout_seconds)
 
     def generate(self, prompt: str, *, system: str | None = None) -> str:
         try:
-            response = self._client.responses.create(model=self._model, instructions=system, input=prompt)
+            response = self._client.responses.create(
+                model=self._model, instructions=system, input=prompt)
             text = getattr(response, "output_text", None)
             if not isinstance(text, str) or not text.strip():
                 raise AIProviderError("AI returned an empty response")
@@ -41,4 +44,5 @@ class OpenAIProvider(AIProvider):
             data = json.loads(raw)
             return schema.model_validate(data) if hasattr(schema, "model_validate") else schema(**data)
         except (ValueError, TypeError, json.JSONDecodeError) as exc:
-            raise AIProviderError("AI returned invalid structured data") from exc
+            raise AIProviderError(
+                "AI returned invalid structured data") from exc

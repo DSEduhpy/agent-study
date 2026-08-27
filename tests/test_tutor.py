@@ -29,14 +29,16 @@ def engine(tmp_path: Path) -> tuple[TutorEngine, FakeAIProvider]:
     profile = load_student_profile(Path("config/profile.yaml"))
     tutor = TutorEngine(
         CurriculumLoader("curriculum"), provider,
-        LearningRepository(SQLiteDatabase(tmp_path / "study.sqlite3")), profile, "prompts",
+        LearningRepository(SQLiteDatabase(
+            tmp_path / "study.sqlite3")), profile, "prompts",
     )
     return tutor, provider
 
 
 def test_context_and_session_lifecycle(engine: tuple[TutorEngine, FakeAIProvider]) -> None:
     tutor, _ = engine
-    session = tutor.start_session("student-1", "cybersecurity/linux/permissions")
+    session = tutor.start_session(
+        "student-1", "cybersecurity/linux/permissions")
     context = tutor._context(session, "Understand chmod")
     assert isinstance(context, TutorContext)
     assert context.lesson.title == "Linux File Permissions"

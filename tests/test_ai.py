@@ -17,10 +17,12 @@ class FakeProvider(AIProvider):
 
 def test_learning_code_can_depend_on_provider_contract() -> None:
     provider: AIProvider = FakeProvider()
-    assert provider.chat([{"role": "user", "content": "hello"}]) == "reply:user: hello"
+    assert provider.chat(
+        [{"role": "user", "content": "hello"}]) == "reply:user: hello"
 
 
 def test_openai_adapter_rejects_missing_credentials() -> None:
-    settings = Settings(Path("."), Path("profile.yaml"), Path("db.sqlite3"), "openai", "", None, 30)
+    settings = Settings(Path("."), Path("profile.yaml"),
+                        Path("db.sqlite3"), "openai", "", None, 30)
     with pytest.raises(AIProviderError, match="not configured"):
         OpenAIProvider(settings)
