@@ -1,0 +1,94 @@
+nodes:
+  - id: data-science
+    name: Data Science
+    area: data_science
+    type: subject
+  - id: sql
+    name: SQL
+    area: data_science
+    subject: Data Science
+    module: SQL
+    type: module
+    aliases: [structured query language]
+  - id: sql-join
+    name: JOIN
+    description: Combine rows from related tables.
+    area: data_science
+    subject: Data Science
+    module: SQL
+    topic: JOIN
+    aliases: [joins, left join, left outer join]
+    skills: [write SQL queries]
+  - id: sql-inner-join
+    name: INNER JOIN
+    description: Return rows that match on both sides of a join.
+    area: data_science
+    subject: Data Science
+    module: SQL
+    topic: JOIN
+    aliases: [inner joins]
+    prerequisites: [sql-join]
+  - id: cybersecurity
+    name: Cybersecurity
+    area: cybersecurity
+    type: subject
+  - id: linux
+    name: Linux
+    area: cybersecurity
+    subject: Cybersecurity
+    module: Linux
+    type: module
+  - id: linux-permissions
+    name: File Permissions
+    description: Control read, write, and execute access on Linux files.
+    area: cybersecurity
+    subject: Cybersecurity
+    module: Linux
+    topic: permissions
+    aliases: [chmod, linux permissions]
+    skills: [manage authorized Linux permissions]
+  - id: machine-learning
+    name: Machine Learning
+    area: data_science
+    subject: Data Science
+    module: Machine Learning
+    type: module
+  - id: decision-trees
+    name: Decision Trees
+    area: data_science
+    subject: Data Science
+    module: Machine Learning
+    topic: Machine Learning
+  - id: overfitting
+    name: Overfitting
+    area: data_science
+    subject: Data Science
+    module: Machine Learning
+    topic: Machine Learning
+    aliases: [over-fit]
+  - id: classification
+    name: Classification
+    area: data_science
+    subject: Data Science
+    module: Machine Learning
+    topic: Machine Learning
+  - id: random-forest
+    name: Random Forest
+    area: data_science
+    subject: Data Science
+    module: Machine Learning
+    topic: Machine Learning
+    aliases: [random forests]
+relations:
+  - source: sql-inner-join
+    target: sql-join
+    type: prerequisite
+  - source: random-forest
+    target: decision-trees
+    type: prerequisite
+  - source: random-forest
+    target: overfitting
+    type: prerequisite
+  - source: random-forest
+    target: classification
+    type: prerequisite

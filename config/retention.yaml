@@ -1,0 +1,7 @@
+retention:
+  initial_interval_days: 1
+  minimum_interval_days: 1
+  maximum_interval_days: 60
+  success_multiplier: 2
+  partial_multiplier: 1
+  failure_multiplier: 0.5

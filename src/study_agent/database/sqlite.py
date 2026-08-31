@@ -31,7 +31,12 @@ CREATE TABLE IF NOT EXISTS exercises (
     expected_answer TEXT NOT NULL,
     explanation TEXT NOT NULL,
     professional_context TEXT NOT NULL,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    area TEXT DEFAULT '',
+    subtopic TEXT DEFAULT '',
+    exercise_type TEXT DEFAULT 'short_answer',
+    options TEXT DEFAULT '[]',
+    learning_objective TEXT DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS exercise_attempts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -52,7 +57,13 @@ CREATE TABLE IF NOT EXISTS study_sessions (
     lesson_ids TEXT NOT NULL,
     notes TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'active',
-    interactions TEXT NOT NULL DEFAULT '[]'
+    interactions TEXT NOT NULL DEFAULT '[]',
+    pedagogical_state TEXT NOT NULL DEFAULT 'orient',
+    learning_objective TEXT NOT NULL DEFAULT '',
+    diagnostic_result TEXT NOT NULL DEFAULT '{}',
+    knowledge_checks TEXT NOT NULL DEFAULT '[]',
+    misconceptions TEXT NOT NULL DEFAULT '[]',
+    current_difficulty TEXT NOT NULL DEFAULT 'beginner'
 );
 CREATE TABLE IF NOT EXISTS learning_progress (
     student_id TEXT NOT NULL REFERENCES students(id),
@@ -70,8 +81,67 @@ CREATE TABLE IF NOT EXISTS mistakes (
     description TEXT NOT NULL,
     created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS daily_goals (
+    student_id TEXT NOT NULL REFERENCES students(id),
+    goal_date TEXT NOT NULL,
+    target INTEGER NOT NULL CHECK (target > 0),
+    completed INTEGER NOT NULL DEFAULT 0 CHECK (completed >= 0),
+    PRIMARY KEY (student_id, goal_date)
+);
+CREATE TABLE IF NOT EXISTS knowledge_nodes (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    area TEXT NOT NULL DEFAULT '',
+    subject TEXT NOT NULL DEFAULT '',
+    module TEXT NOT NULL DEFAULT '',
+    topic TEXT NOT NULL DEFAULT '',
+    node_type TEXT NOT NULL DEFAULT 'concept',
+    difficulty TEXT NOT NULL DEFAULT 'beginner',
+    learning_objectives TEXT NOT NULL DEFAULT '[]',
+    prerequisites TEXT NOT NULL DEFAULT '[]',
+    skills TEXT NOT NULL DEFAULT '[]',
+    aliases TEXT NOT NULL DEFAULT '[]',
+    tags TEXT NOT NULL DEFAULT '[]'
+);
+CREATE TABLE IF NOT EXISTS knowledge_relations (
+    source_id TEXT NOT NULL REFERENCES knowledge_nodes(id),
+    target_id TEXT NOT NULL REFERENCES knowledge_nodes(id),
+    relation_type TEXT NOT NULL,
+    PRIMARY KEY (source_id, target_id, relation_type)
+);
+CREATE TABLE IF NOT EXISTS retention_states (
+    student_id TEXT NOT NULL REFERENCES students(id),
+    knowledge_node_id TEXT NOT NULL REFERENCES knowledge_nodes(id),
+    stability REAL NOT NULL DEFAULT 0 CHECK (stability >= 0),
+    difficulty REAL NOT NULL DEFAULT 0.5 CHECK (difficulty BETWEEN 0 AND 1),
+    retrievability REAL NOT NULL DEFAULT 0 CHECK (retrievability BETWEEN 0 AND 1),
+    review_count INTEGER NOT NULL DEFAULT 0 CHECK (review_count >= 0),
+    successful_reviews INTEGER NOT NULL DEFAULT 0 CHECK (successful_reviews >= 0),
+    failed_reviews INTEGER NOT NULL DEFAULT 0 CHECK (failed_reviews >= 0),
+    last_review_at TEXT,
+    next_review_at TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (student_id, knowledge_node_id)
+);
+CREATE TABLE IF NOT EXISTS review_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    student_id TEXT NOT NULL REFERENCES students(id),
+    knowledge_node_id TEXT NOT NULL REFERENCES knowledge_nodes(id),
+    reviewed_at TEXT NOT NULL,
+    outcome TEXT NOT NULL CHECK (outcome IN ('success', 'partial', 'failure')),
+    score REAL NOT NULL CHECK (score BETWEEN 0 AND 100),
+    previous_interval_days REAL NOT NULL CHECK (previous_interval_days >= 0),
+    new_interval_days REAL NOT NULL CHECK (new_interval_days > 0),
+    previous_retention REAL NOT NULL CHECK (previous_retention BETWEEN 0 AND 1),
+    new_retention REAL NOT NULL CHECK (new_retention BETWEEN 0 AND 1)
+);
 CREATE INDEX IF NOT EXISTS idx_attempts_student ON exercise_attempts(student_id);
 CREATE INDEX IF NOT EXISTS idx_progress_student ON learning_progress(student_id);
+CREATE INDEX IF NOT EXISTS idx_knowledge_relations_target ON knowledge_relations(target_id, relation_type);
+CREATE INDEX IF NOT EXISTS idx_retention_due ON retention_states(student_id, next_review_at);
+CREATE INDEX IF NOT EXISTS idx_review_history_node ON review_history(student_id, knowledge_node_id, reviewed_at);
 """
 
 
@@ -94,15 +164,36 @@ class SQLiteDatabase:
     @staticmethod
     def _migrate_sessions(connection: sqlite3.Connection) -> None:
         """Add session lifecycle columns to databases created by version 0.1."""
-        columns = {row[1] for row in connection.execute(
+        study_columns = {row[1] for row in connection.execute(
             "PRAGMA table_info(study_sessions)")}
-        migrations = {
+        exercise_columns = {row[1] for row in connection.execute(
+            "PRAGMA table_info(exercises)")}
+
+        session_migrations = {
             "session_id": "ALTER TABLE study_sessions ADD COLUMN session_id TEXT",
             "status": "ALTER TABLE study_sessions ADD COLUMN status TEXT NOT NULL DEFAULT 'active'",
             "interactions": "ALTER TABLE study_sessions ADD COLUMN interactions TEXT NOT NULL DEFAULT '[]'",
+            "pedagogical_state": "ALTER TABLE study_sessions ADD COLUMN pedagogical_state TEXT NOT NULL DEFAULT 'orient'",
+            "learning_objective": "ALTER TABLE study_sessions ADD COLUMN learning_objective TEXT NOT NULL DEFAULT ''",
+            "diagnostic_result": "ALTER TABLE study_sessions ADD COLUMN diagnostic_result TEXT NOT NULL DEFAULT '{}'",
+            "knowledge_checks": "ALTER TABLE study_sessions ADD COLUMN knowledge_checks TEXT NOT NULL DEFAULT '[]'",
+            "misconceptions": "ALTER TABLE study_sessions ADD COLUMN misconceptions TEXT NOT NULL DEFAULT '[]'",
+            "current_difficulty": "ALTER TABLE study_sessions ADD COLUMN current_difficulty TEXT NOT NULL DEFAULT 'beginner'",
         }
-        for column, statement in migrations.items():
-            if column not in columns:
+        exercise_migrations = {
+            "area": "ALTER TABLE exercises ADD COLUMN area TEXT NOT NULL DEFAULT ''",
+            "subtopic": "ALTER TABLE exercises ADD COLUMN subtopic TEXT NOT NULL DEFAULT ''",
+            "exercise_type": "ALTER TABLE exercises ADD COLUMN exercise_type TEXT NOT NULL DEFAULT 'short_answer'",
+            "options": "ALTER TABLE exercises ADD COLUMN options TEXT NOT NULL DEFAULT '[]'",
+            "learning_objective": "ALTER TABLE exercises ADD COLUMN learning_objective TEXT NOT NULL DEFAULT ''",
+        }
+
+        for column, statement in session_migrations.items():
+            if column not in study_columns:
+                connection.execute(statement)
+
+        for column, statement in exercise_migrations.items():
+            if column not in exercise_columns:
                 connection.execute(statement)
 
     @contextmanager

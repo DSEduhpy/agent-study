@@ -1,0 +1,97 @@
+{
+  "name": "study-agent-vscode",
+  "displayName": "Study Agent",
+  "description": "Interactive Study Agent backed by the Python learning core.",
+  "version": "0.1.0",
+  "publisher": "study-agent",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:studyAgent.openDashboard",
+    "onView:studyAgent.sidebar"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "studyAgent.openDashboard",
+        "title": "Study Agent: Open Dashboard"
+      },
+      {
+        "command": "studyAgent.startStudy",
+        "title": "Study Agent: Start Study"
+      },
+      {
+        "command": "studyAgent.askTutor",
+        "title": "Study Agent: Ask Tutor"
+      },
+      {
+        "command": "studyAgent.showReviews",
+        "title": "Study Agent: Show Reviews"
+      },
+      {
+        "command": "studyAgent.openCurriculum",
+        "title": "Study Agent: Open Curriculum"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "studyAgent",
+          "title": "Study Agent",
+          "icon": "media/book.svg"
+        }
+      ]
+    },
+    "views": {
+      "studyAgent": [
+        {
+          "id": "studyAgent.sidebar",
+          "name": "Study Agent",
+          "type": "webview"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Study Agent",
+      "properties": {
+        "studyAgent.pythonPath": {
+          "type": "string",
+          "default": "python"
+        },
+        "studyAgent.autoStart": {
+          "type": "boolean",
+          "default": true
+        },
+        "studyAgent.logLevel": {
+          "type": "string",
+          "enum": [
+            "error",
+            "warn",
+            "info",
+            "debug"
+          ],
+          "default": "info"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./tsconfig.json",
+    "typecheck": "tsc -p ./tsconfig.json --noEmit",
+    "lint": "tsc -p ./tsconfig.json --noEmit",
+    "test": "npm run compile && node test/protocol.test.js",
+    "test:activation": "npm run compile && vscode-test"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/vscode": "^1.90.0",
+    "@vscode/test-cli": "^0.0.15",
+    "@vscode/test-electron": "^3.1.0",
+    "typescript": "^5.5.0"
+  }
+}

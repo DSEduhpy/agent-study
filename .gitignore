@@ -1,12 +1,29 @@
 # Secrets and local configuration
 .env
+.env.*
+!.env.example
 
 # Python
 __pycache__/
 *.py[cod]
 .pytest_cache/
 .venv/
+*.egg-info/
 
 # Local data
 /data/*.db
 /data/*.sqlite3
+
+# VS Code extension
+extension/node_modules/
+extension/.vscode-test/
+extension/out/
+extension/dist/
+
+# OS
+.DS_Store
+Thumbs.db
+# VS Code extension
+extension/node_modules/
+extension/.vscode-test/
+extension/out/
