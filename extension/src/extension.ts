@@ -10,23 +10,35 @@ type ExerciseResponse = { sessionId: string; exercise: Exercise };
  * Uses only vscode.workspace.workspaceFolders, never workspaceFile or process.cwd().
  */
 function getWorkspaceRoot(): string | undefined {
-  return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const folders = vscode.workspace.workspaceFolders;
+  const paths = folders?.map(folder => folder.uri.fsPath) ?? [];
+
+  console.log("[Study Agent] workspaceFolders:", folders);
+  console.log("[Study Agent] workspace paths:", paths);
+  console.log("[Study Agent] workspace resolution:", paths[0] ?? "<none>");
+
+  return paths[0];
 }
 
 export function activate(context: vscode.ExtensionContext): void {
   const root = getWorkspaceRoot();
-  const client = root ? new CoreClient(root) : undefined;
-  const view = new StudyAgentView(client);
+  console.log("[Study Agent] workspace resolution (activate):", root ?? "<none>");
+  console.log("[Study Agent] activate()", {
+    extensionPath: context.extensionUri.fsPath,
+    entryPoint: context.asAbsolutePath("out/extension.js"),
+    workspaceRoot: root ?? "<none>"
+  });
+
+  const view = new StudyAgentView(root);
+  const workspaceChanged = vscode.workspace.onDidChangeWorkspaceFolders(() => {
+    console.log("[Study Agent] workspace folders changed");
+    view.refreshWorkspace();
+  });
 
   context.subscriptions.push(
-    vscode.window.registerWebviewViewProvider("studyAgent.sidebar", view)
-  );
-
-  if (client) {
-    context.subscriptions.push(client);
-  }
-
-  context.subscriptions.push(
+    view,
+    workspaceChanged,
+    vscode.window.registerWebviewViewProvider("studyAgent.sidebar", view),
     vscode.commands.registerCommand("studyAgent.openDashboard", () => view.show("dashboard")),
     vscode.commands.registerCommand("studyAgent.startStudy", () => view.show("dashboard")),
     vscode.commands.registerCommand("studyAgent.askTutor", () => view.show("tutor")),
@@ -35,13 +47,17 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 }
 
-class StudyAgentView implements vscode.WebviewViewProvider {
+class StudyAgentView implements vscode.WebviewViewProvider, vscode.Disposable {
   private view: vscode.WebviewView | undefined;
   private mode = "dashboard";
   private sessionId = "";
   private exercise: Exercise | undefined;
+  private client: CoreClient | undefined;
+  private clientRoot: string | undefined;
 
-  constructor(public client?: CoreClient) { }
+  constructor(initialRoot?: string) {
+    this.clientRoot = initialRoot;
+  }
 
   show(mode: string): void {
     this.mode = mode;
@@ -50,6 +66,9 @@ class StudyAgentView implements vscode.WebviewViewProvider {
 
   resolveWebviewView(view: vscode.WebviewView): void {
     this.view = view;
+    console.log("[Study Agent] resolveWebviewView", {
+      hasWorkspace: Boolean(vscode.workspace.workspaceFolders?.length)
+    });
 
     view.webview.options = {
       enableScripts: true
@@ -62,16 +81,45 @@ class StudyAgentView implements vscode.WebviewViewProvider {
     void this.render();
   }
 
+  refreshWorkspace(): void {
+    void this.render();
+  }
+
+  dispose(): void {
+    this.client?.dispose();
+    this.client = undefined;
+    this.view = undefined;
+  }
+
+  private syncClient(root: string | undefined): void {
+    if (root === this.clientRoot && (root === undefined || this.client)) return;
+
+    if (this.client) {
+      console.log("[Study Agent] disposing CoreClient for workspace change", {
+        previousRoot: this.clientRoot,
+        nextRoot: root ?? "<none>"
+      });
+      this.client.dispose();
+    }
+
+    this.client = undefined;
+    this.clientRoot = root;
+
+    if (root) {
+      console.log("[Study Agent] creating CoreClient", { workspaceRoot: root });
+      this.client = new CoreClient(root);
+    }
+  }
+
   private async render(): Promise<void> {
     if (!this.view) return;
 
     const root = getWorkspaceRoot();
+    console.log("[Study Agent] workspace resolution (render):", root ?? "<none>");
+    this.syncClient(root);
+    const client = this.client;
 
-    if (!this.client && root) {
-      this.client = new CoreClient(root);
-    }
-
-    if (!this.client) {
+    if (!client) {
       this.view.webview.html = render(this.view.webview, "Study Agent", {
         ok: false,
         error: {
@@ -95,7 +143,7 @@ class StudyAgentView implements vscode.WebviewViewProvider {
     this.view.webview.html = render(this.view.webview, operation, { ok: true, data: { type: "loading" } });
 
     try {
-      const response = await this.client.request(operation);
+      const response = await client.request(operation);
       this.view.webview.html = render(this.view.webview, this.mode, response);
     } catch (err) {
       this.view.webview.html = render(this.view.webview, "Error", {
@@ -106,15 +154,16 @@ class StudyAgentView implements vscode.WebviewViewProvider {
   }
 
   private async handle(message: { command: string; answer?: string; question?: string }): Promise<void> {
-    if (!this.client || !this.view) return;
+    const client = this.client;
+    if (!client || !this.view) return;
 
     if (message.command === "refresh") return this.render();
 
     if (message.command === "start") {
-      const dashboard = await this.client.request<Dashboard>("dashboard");
+      const dashboard = await client.request<Dashboard>("dashboard");
       if (!dashboard.ok || !dashboard.data.firstLessonId) return this.showError(dashboard);
 
-      const lesson = await this.client.request<{ sessionId: string; state: string; content: string }>(
+      const lesson = await client.request<{ sessionId: string; state: string; content: string }>(
         "startLesson",
         {
           lessonId: dashboard.data.resumeLessonId || dashboard.data.firstLessonId,
@@ -130,7 +179,7 @@ class StudyAgentView implements vscode.WebviewViewProvider {
     }
 
     if (message.command === "practice") {
-      const response = await this.client.request<ExerciseResponse>("startExercise", { sessionId: this.sessionId, topic: "" });
+      const response = await client.request<ExerciseResponse>("startExercise", { sessionId: this.sessionId, topic: "" });
       if (!response.ok) return this.showError(response);
 
       this.sessionId = response.data.sessionId;
@@ -141,7 +190,7 @@ class StudyAgentView implements vscode.WebviewViewProvider {
 
     if (message.command === "submit" && this.exercise) {
       this.view.webview.postMessage({ type: "submissionState", state: "loading" });
-      const response = await this.client.request("submitAnswer", {
+      const response = await client.request("submitAnswer", {
         ...this.exercise,
         exerciseId: this.exercise.id,
         answer: message.answer ?? ""
@@ -154,7 +203,7 @@ class StudyAgentView implements vscode.WebviewViewProvider {
     }
 
     if (message.command === "next") {
-      const response = await this.client.request<ExerciseResponse>("startExercise", { sessionId: this.sessionId, topic: this.exercise?.topic ?? "" });
+      const response = await client.request<ExerciseResponse>("startExercise", { sessionId: this.sessionId, topic: this.exercise?.topic ?? "" });
       if (!response.ok) return this.showError(response);
 
       this.exercise = response.data.exercise;
@@ -163,7 +212,7 @@ class StudyAgentView implements vscode.WebviewViewProvider {
     }
 
     if (message.command === "tutor" && message.question) {
-      const response = await this.client.request("askTutor", { sessionId: this.sessionId, question: message.question });
+      const response = await client.request("askTutor", { sessionId: this.sessionId, question: message.question });
       if (!response.ok) return this.showError(response);
 
       this.view.webview.html = render(this.view.webview, "Tutor", response);
@@ -182,8 +231,9 @@ function render(webview: vscode.Webview, title: string, response: CoreResponse<u
   const data = response.ok
     ? JSON.stringify(response.data)
     : JSON.stringify({ error: response.error.message, code: response.error.code });
+  const csp = `default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';`;
 
-  return `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="default-src 'none';style-src 'unsafe-inline';script-src 'nonce-${nonce}';"><style>${styles}</style></head><body><header><b>SA</b><div><strong>Study Agent</strong><small>${esc(title)}</small></div><button id="refresh" title="Refresh">Refresh</button></header><main id="app"></main><script nonce="${nonce}">const vscode=acquireVsCodeApi(),data=${data},root=document.getElementById('app'),esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]||c)),post=(command,payload={})=>vscode.postMessage({command,...payload});if(data.error){root.innerHTML='<section class="error"><b>'+esc(data.code)+'</b><p>'+esc(data.error)+'</p></section>'}else if(data.type==='loading'){root.innerHTML='<p class="loading">Loading...</p>'}else if(data.dailyGoal){root.innerHTML='<section class="hero"><small>TODAY</small><h1>Make today count.</h1><strong class="score">'+data.dailyGoal.completed+' / '+data.dailyGoal.target+'</strong><p>exercises completed</p><div class="bar"><i style="width:'+Math.min(100,data.dailyGoal.completed/data.dailyGoal.target*100)+'%"></i></div></section><section class="grid"><article><small>REVIEWS</small><b>'+data.reviewCount+'</b><span>pending now</span></article><article><small>NEXT FOCUS</small><b>'+(data.recommendation?esc(data.recommendation.topic):'Start a topic')+'</b><span>'+(data.recommendation?esc(data.recommendation.reason):'Workspace ready')+'</span></article></section><button class="primary" id="start">Start studying</button>'}else if(data.type==='exercise'){const x=data.exercise;root.innerHTML='<section class="hero"><small>EXERCISE</small><h1>'+esc(x.subject)+' &rarr; '+esc(x.topic)+'</h1><span class="pill">'+esc(x.difficulty)+'</span><p class="context">'+esc(x.professionalContext)+'</p><h2>Question</h2><p>'+esc(x.question)+'</p><label for="answer">Your answer</label><textarea id="answer" aria-label="Your answer"></textarea><button class="primary" id="submit">Submit answer</button><button class="secondary" id="askExercise">Ask tutor</button></section>'}else if(data.evaluation){const x=data.evaluation;root.innerHTML='<section class="hero"><small>RESULT</small><h1>'+esc(x.status)+'</h1><p>'+esc(x.feedback)+'</p><h2>How to think</h2><p>'+esc(x.explanation||'Review the concept and try again.')+'</p>'+(x.misconception?'<p class="error">'+esc(x.misconception)+'</p>':'')+'<button class="primary" id="next">Next</button></section>'}else if(data.items){root.innerHTML='<section class="hero"><small>MEMORY LOOP</small><h1>Reviews that matter.</h1></section>'+data.items.map(x=>'<article class="row"><b>'+esc(x.concept)+'</b><span>'+esc(x.status)+'</span></article>').join('')}else if(data.concepts){root.innerHTML='<section class="hero"><small>KNOWLEDGE MAP</small><h1>Explore your curriculum.</h1></section>'+data.concepts.map(x=>'<article class="row"><b>'+esc(x.name)+'</b><span>'+esc(x.type)+'</span></article>').join('')}else if(data.content){root.innerHTML='<section class="hero"><small>'+esc(data.state)+'</small><h1>Study step</h1><pre>'+esc(data.content)+'</pre><button class="primary" id="practice">Practice</button><button class="secondary" id="askLesson">Ask tutor</button></section>'}else if(data.answer){root.innerHTML='<section class="hero"><small>TUTOR</small><h1>Let us work through it.</h1><p>'+esc(data.answer)+'</p><textarea id="question" aria-label="Tutor question" placeholder="Ask a question"></textarea><button class="primary" id="ask">Ask tutor</button></section>'}document.getElementById('refresh')?.addEventListener('click',()=>post('refresh'));document.getElementById('start')?.addEventListener('click',()=>post('start'));document.getElementById('practice')?.addEventListener('click',()=>post('practice'));document.getElementById('submit')?.addEventListener('click',()=>{const b=document.getElementById('submit');b.disabled=true;b.textContent='Evaluating...';post('submit',{answer:document.getElementById('answer').value})});document.getElementById('next')?.addEventListener('click',()=>post('next'));document.getElementById('ask')?.addEventListener('click',()=>post('tutor',{question:document.getElementById('question').value}));document.getElementById('askExercise')?.addEventListener('click',()=>post('tutor',{question:'I need help understanding this exercise.'}));document.getElementById('askLesson')?.addEventListener('click',()=>post('tutor',{question:'I need help with this lesson.'}));</script></body></html>`;
+  return `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="${csp}"><style>${styles}</style></head><body><header><b>SA</b><div><strong>Study Agent</strong><small>${esc(title)}</small></div><button id="refresh" title="Refresh">Refresh</button></header><main id="app"></main><script nonce="${nonce}">const vscode=acquireVsCodeApi(),data=${data},root=document.getElementById('app'),esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]||c)),post=(command,payload={})=>vscode.postMessage({command,...payload});if(data.error){root.innerHTML='<section class="error"><b>'+esc(data.code)+'</b><p>'+esc(data.error)+'</p></section>'}else if(data.type==='loading'){root.innerHTML='<p class="loading">Loading...</p>'}else if(data.dailyGoal){root.innerHTML='<section class="hero"><small>TODAY</small><h1>Make today count.</h1><strong class="score">'+data.dailyGoal.completed+' / '+data.dailyGoal.target+'</strong><p>exercises completed</p><div class="bar"><i style="width:'+Math.min(100,data.dailyGoal.completed/data.dailyGoal.target*100)+'%"></i></div></section><section class="grid"><article><small>REVIEWS</small><b>'+data.reviewCount+'</b><span>pending now</span></article><article><small>NEXT FOCUS</small><b>'+(data.recommendation?esc(data.recommendation.topic):'Start a topic')+'</b><span>'+(data.recommendation?esc(data.recommendation.reason):'Workspace ready')+'</span></article></section><button class="primary" id="start">Start studying</button>'}else if(data.type==='exercise'){const x=data.exercise;root.innerHTML='<section class="hero"><small>EXERCISE</small><h1>'+esc(x.subject)+' &rarr; '+esc(x.topic)+'</h1><span class="pill">'+esc(x.difficulty)+'</span><p class="context">'+esc(x.professionalContext)+'</p><h2>Question</h2><p>'+esc(x.question)+'</p><label for="answer">Your answer</label><textarea id="answer" aria-label="Your answer"></textarea><button class="primary" id="submit">Submit answer</button><button class="secondary" id="askExercise">Ask tutor</button></section>'}else if(data.evaluation){const x=data.evaluation;root.innerHTML='<section class="hero"><small>RESULT</small><h1>'+esc(x.status)+'</h1><p>'+esc(x.feedback)+'</p><h2>How to think</h2><p>'+esc(x.explanation||'Review the concept and try again.')+'</p>'+(x.misconception?'<p class="error">'+esc(x.misconception)+'</p>':'')+'<button class="primary" id="next">Next</button></section>'}else if(data.items){root.innerHTML='<section class="hero"><small>MEMORY LOOP</small><h1>Reviews that matter.</h1></section>'+data.items.map(x=>'<article class="row"><b>'+esc(x.concept)+'</b><span>'+esc(x.status)+'</span></article>').join('')}else if(data.concepts){root.innerHTML='<section class="hero"><small>KNOWLEDGE MAP</small><h1>Explore your curriculum.</h1></section>'+data.concepts.map(x=>'<article class="row"><b>'+esc(x.name)+'</b><span>'+esc(x.type)+'</span></article>').join('')}else if(data.content){root.innerHTML='<section class="hero"><small>'+esc(data.state)+'</small><h1>Study step</h1><pre>'+esc(data.content)+'</pre><button class="primary" id="practice">Practice</button><button class="secondary" id="askLesson">Ask tutor</button></section>'}else if(data.answer){root.innerHTML='<section class="hero"><small>TUTOR</small><h1>Let us work through it.</h1><p>'+esc(data.answer)+'</p><textarea id="question" aria-label="Tutor question" placeholder="Ask a question"></textarea><button class="primary" id="ask">Ask tutor</button></section>'}document.getElementById('refresh')?.addEventListener('click',()=>post('refresh'));document.getElementById('start')?.addEventListener('click',()=>post('start'));document.getElementById('practice')?.addEventListener('click',()=>post('practice'));document.getElementById('submit')?.addEventListener('click',()=>{const b=document.getElementById('submit');b.disabled=true;b.textContent='Evaluating...';post('submit',{answer:document.getElementById('answer').value})});document.getElementById('next')?.addEventListener('click',()=>post('next'));document.getElementById('ask')?.addEventListener('click',()=>post('tutor',{question:document.getElementById('question').value}));document.getElementById('askExercise')?.addEventListener('click',()=>post('tutor',{question:'I need help understanding this exercise.'}));document.getElementById('askLesson')?.addEventListener('click',()=>post('tutor',{question:'I need help with this lesson.'}));</script></body></html>`;
 }
 
 function esc(value: string): string { return value.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] ?? c)); }

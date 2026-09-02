@@ -33,6 +33,29 @@ check("NO process.cwd() fallback in activate", () => {
     assert(!activate.includes("process.cwd()"));
 });
 
+console.log("\n=== DEF-001: Workspace Lifecycle & Observability ===");
+check("Rechecks workspace folders during render", () => {
+    const src = fs.readFileSync(path.join(__dirname, "../src/extension.ts"), "utf-8");
+    assert(src.includes("const root = getWorkspaceRoot();"));
+    assert(src.includes('workspace resolution (render)'));
+});
+
+check("Refreshes the view when workspace folders change", () => {
+    const src = fs.readFileSync(path.join(__dirname, "../src/extension.ts"), "utf-8");
+    assert(src.includes("onDidChangeWorkspaceFolders"));
+    assert(src.includes("view.refreshWorkspace()"));
+});
+
+check("Logs the extension entry point for stale-bundle diagnosis", () => {
+    const src = fs.readFileSync(path.join(__dirname, "../src/extension.ts"), "utf-8");
+    assert(src.includes('context.asAbsolutePath("out/extension.js")'));
+});
+
+check("Uses the webview CSP source", () => {
+    const src = fs.readFileSync(path.join(__dirname, "../src/extension.ts"), "utf-8");
+    assert(src.includes("webview.cspSource"));
+});
+
 console.log("\n=== DEF-002 & DEF-006: Python Discovery ===");
 check("Validates src folder", () => {
     const src = fs.readFileSync(path.join(__dirname, "../src/coreClient.ts"), "utf-8");
