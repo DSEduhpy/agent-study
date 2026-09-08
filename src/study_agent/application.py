@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from study_agent.ai.client import OpenAIProvider
+from study_agent.ai.ollama import OllamaProvider
 from study_agent.ai.provider import AIProvider
 from study_agent.config.settings import load_settings, load_student_profile
 from study_agent.core.models import Exercise, ExerciseType, KnowledgeNode
@@ -144,7 +145,16 @@ class StudyAgentApplication:
     def _ensure_learning_services(self) -> None:
         if self._tutor is not None:
             return
-        provider = self._provider or OpenAIProvider(self.settings)
+        if self._provider is not None:
+            provider = self._provider
+        elif self.settings.ai_provider.lower() == "ollama":
+            provider = OllamaProvider(self.settings)
+        elif self.settings.ai_provider.lower() == "openai":
+            provider = OpenAIProvider(self.settings)
+        else:
+            raise ValueError(
+                f"Unsupported AI provider: {self.settings.ai_provider}"
+            )
         self._tutor = TutorEngine(self.loader, provider, self.repository, self.profile, self.root / "prompts")
         self._pedagogy = PedagogicalEngine(self._tutor, self.loader, self.repository, self.profile, self.root / "prompts")
         self._exercise = ExerciseEngine(ExerciseGenerator(provider), ExerciseSelector(self.repository), ExerciseEvaluator(provider), self.repository, self._pedagogy, self.daily_goal, self.retention)

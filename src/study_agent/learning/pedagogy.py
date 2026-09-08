@@ -240,13 +240,99 @@ class PedagogicalEngine:
     def generate_step_message(self, session: StudySession, user_request: str) -> str:
         """Create a short teaching message using the current pedagogical state."""
         context = self.build_context(session)
+        rendered_prompt = self._render_pedagogical_prompt(context)
+
         return (
             f"Current pedagogical state: {context.current_state.value}\n"
             f"Objective: {context.learning_objective}\n"
             f"Difficulty: {context.current_difficulty}\n"
-            f"Lesson: {context.lesson_title} ({context.lesson_area}/{context.lesson_topic})\n\n"
-            f"Teacher guidance: {self.pedagogical_prompt}\n\n"
+            f"Lesson: {context.lesson_title} "
+            f"({context.lesson_area}/{context.lesson_topic})\n\n"
+            f"Teacher guidance: {rendered_prompt}\n\n"
             f"Student request: {user_request.strip()}"
+        )
+
+    def _render_pedagogical_prompt(self, context: PedagogicalContext) -> str:
+        """Render the pedagogical template using the current learning context."""
+        replacements = {
+            "{{CURRENT_STATE}}": context.current_state.value,
+            "{{STUDENT_PROFILE}}": self._format_student_profile(
+                context.student_profile
+            ),
+            "{{OBJECTIVE}}": context.learning_objective,
+            "{{CURRENT_DIFFICULTY}}": context.current_difficulty,
+            "{{PREVIOUS_INTERACTIONS}}": self._format_list(
+                context.previous_interactions
+            ),
+            "{{DIAGNOSTIC_RESULT}}": self._format_knowledge_check(
+                context.diagnostic_result
+            ),
+            "{{KNOWLEDGE_CHECKS}}": self._format_knowledge_checks(
+                context.knowledge_checks
+            ),
+            "{{MISCONCEPTIONS}}": self._format_list(
+                context.misconceptions
+            ),
+        }
+
+        rendered = self.pedagogical_prompt
+        for placeholder, value in replacements.items():
+            rendered = rendered.replace(placeholder, value)
+
+        return rendered
+
+    @staticmethod
+    def _format_student_profile(profile: StudentProfile) -> str:
+        """Format student preferences as stable, readable prompt data."""
+        return (
+            f"Name: {profile.name}\n"
+            f"Daily goal: {profile.daily_goal}\n"
+            f"Primary areas: {', '.join(profile.primary_areas) or 'None'}\n"
+            f"Secondary areas: {', '.join(profile.secondary_areas) or 'None'}\n"
+            f"Adaptive learning: {profile.adaptive}\n"
+            f"Prioritize weak topics: {profile.prioritize_weak_topics}\n"
+            f"Professional context: {profile.contextualize_professionally}\n"
+            f"Use analogies: {profile.use_analogies}\n"
+            f"Practical labs: {profile.include_practical_labs}"
+        )
+
+    @staticmethod
+    def _format_list(values: tuple[str, ...]) -> str:
+        """Format a sequence as stable bullet points for the prompt."""
+        if not values:
+            return "None"
+
+        return "\n".join(f"- {value}" for value in values)
+
+    @staticmethod
+    def _format_knowledge_check(
+        result: KnowledgeCheckResult | None,
+    ) -> str:
+        """Format one knowledge-check result for the prompt."""
+        if result is None:
+            return "None"
+
+        return (
+            f"Score: {result.score}\n"
+            f"Confidence: {result.confidence}\n"
+            f"Correct: {result.correct}\n"
+            f"Reasoning quality: {result.reasoning_quality}\n"
+            f"Misconception: {result.misconception or 'None'}\n"
+            f"Recommendation: {result.recommendation or 'None'}"
+        )
+
+    @classmethod
+    def _format_knowledge_checks(
+        cls,
+        results: tuple[KnowledgeCheckResult, ...],
+    ) -> str:
+        """Format all knowledge-check results for the prompt."""
+        if not results:
+            return "None"
+
+        return "\n\n".join(
+            f"Check {index}:\n{cls._format_knowledge_check(result)}"
+            for index, result in enumerate(results, start=1)
         )
 
     def record_interaction(self, session: StudySession, interaction: str) -> StudySession:

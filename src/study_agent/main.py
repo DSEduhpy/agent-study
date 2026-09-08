@@ -15,6 +15,7 @@ def initialize() -> None:
 def run_cli() -> None:
     """Run a small interactive CLI using the configured provider."""
     from study_agent.ai.client import OpenAIProvider
+    from study_agent.ai.ollama import OllamaProvider
     from study_agent.core.models import LessonState
     from study_agent.learning.pedagogy import PedagogicalEngine
     from study_agent.learning.adaptive_learning import AdaptiveLearningEngine
@@ -42,7 +43,16 @@ def run_cli() -> None:
         _run_curriculum_command(command.lower(), argument.strip(), curriculum, adaptive, retention)
         return
 
-    tutor = TutorEngine(loader, OpenAIProvider(settings), repository, profile,
+    if settings.ai_provider.lower() == "ollama":
+        provider = OllamaProvider(settings)
+    elif settings.ai_provider.lower() == "openai":
+        provider = OpenAIProvider(settings)
+    else:
+        raise ValueError(
+            f"Unsupported AI provider: {settings.ai_provider}"
+        )
+
+    tutor = TutorEngine(loader, provider, repository, profile,
                         settings.project_root / "prompts")
     pedagogical = PedagogicalEngine(tutor, loader, repository, profile,
                                     settings.project_root / "prompts")
