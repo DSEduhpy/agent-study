@@ -23,13 +23,10 @@ class OllamaProvider(AIProvider):
     def generate(self, prompt: str, *, system: str | None = None) -> str:
         payload: dict[str, Any] = {
             "model": self._model,
-            "prompt": prompt,
+            "prompt": self._combine_system_and_prompt(prompt, system),
             "stream": False,
             "think": False,
         }
-
-        if system:
-            payload["system"] = system
 
         data = self._request("/api/generate", payload)
         text = data.get("response")
@@ -48,14 +45,11 @@ class OllamaProvider(AIProvider):
     ) -> Any:
         payload: dict[str, Any] = {
             "model": self._model,
-            "prompt": prompt,
+            "prompt": self._combine_system_and_prompt(prompt, system),
             "format": "json",
             "stream": False,
             "think": False,
         }
-
-        if system:
-            payload["system"] = system
 
         response = self._request("/api/generate", payload)
         raw = response.get("response")
@@ -85,7 +79,21 @@ class OllamaProvider(AIProvider):
                 "Ollama returned invalid structured data"
             ) from exc
 
-    def _request(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
+    @staticmethod
+    def _combine_system_and_prompt(
+        prompt: str,
+        system: str | None,
+    ) -> str:
+        if not system or not system.strip():
+            return prompt
+
+        return f"{system.strip()}\n\n{prompt.strip()}"
+
+    def _request(
+        self,
+        path: str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
         request = Request(
             f"{self._base_url}{path}",
             data=json.dumps(payload).encode("utf-8"),
