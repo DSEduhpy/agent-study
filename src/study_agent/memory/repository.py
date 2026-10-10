@@ -18,6 +18,7 @@ from study_agent.core.models import (
     LessonState,
     LearningProgress,
     StudentProfile,
+    SessionStatus,
     StudySession,
 )
 from study_agent.database.sqlite import SQLiteDatabase
@@ -351,7 +352,7 @@ def _session_from_row(row: dict[str, object]) -> StudySession:
         lesson_ids=tuple(json.loads(row.get("lesson_ids") or "[]")),
         notes=str(row.get("notes") or ""),
         session_id=str(row["session_id"]),
-        status=row["status"],
+        status=SessionStatus(str(row["status"])),
         interactions=tuple(json.loads(row.get("interactions") or "[]")),
         pedagogical_state=LessonState(
             str(row.get("pedagogical_state") or LessonState.ORIENT.value)),
