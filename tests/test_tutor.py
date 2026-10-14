@@ -65,6 +65,22 @@ def test_explanation_and_repeated_question_keep_context(engine: tuple[TutorEngin
     assert "Previous interactions: 1" in provider.calls[1][0]
 
 
+def test_direct_mode_preserves_unanswered_comprehension_question(
+    engine: tuple[TutorEngine, FakeAIProvider],
+) -> None:
+    tutor, provider = engine
+    session = tutor.start_session("student-1", "data_science/sql/joins")
+
+    tutor.ask(session, "Explain INNER JOIN to a beginner.")
+
+    prompt, system = provider.calls[0]
+    assert "Answer directly, then check understanding." in prompt
+    assert system is not None
+    assert "do not immediately reveal" in system
+    assert "Wait for the student to respond" in system
+    assert "verify that the explanation matches the supplied data" in system
+
+
 def test_socratic_mode_is_explicit(engine: tuple[TutorEngine, FakeAIProvider]) -> None:
     tutor, provider = engine
     session = tutor.start_session("student-1", "data_science/sql/joins")
